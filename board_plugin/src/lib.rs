@@ -1,21 +1,40 @@
 pub mod components;
 pub mod resources;
+mod systems;
+mod bounds;
 
 use bevy::log;
 use bevy::prelude::*;
+
+use resources::tile::Tile;
 use resources::tile_map::TileMap;
 use resources::BoardOptions;
 use resources::BoardPosition;
 use resources::TileSize;
+use resources::board::Board;
 
-use crate::components::Coordinates;
+use bounds::Bounds2;
+use components::BombNeighbor;
+use components::Coordinates;
+// use components::Uncover;
+use components::Bomb;
 
 pub struct BoardPlugin;
 
 impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(Self::create_board);
+        app.add_system(systems::input::handle_input);
         log::info!("Loaded Board Plugin");
+
+        #[cfg(feature = "debug")]
+        {
+            app.register_type::<BombNeighbor>();
+            app.register_type::<Bomb>();
+            app.register_type::<BoardOptions>();
+            // app.register_type::<Board>();
+            // app.register_type::<Uncover>();
+        }
     }
 }
 
@@ -26,7 +45,11 @@ impl BoardPlugin {
         board_options: Option<Res<BoardOptions>>,
         // window: Res<WindowDescriptor>
         window: Query<&Window>,
+        asset_server: Res<AssetServer>,
     ) {
+        let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
+        let bomb_sprite: Handle<Image> = asset_server.load("sprites/bomb.png");
+
         let options = match board_options {
             None => BoardOptions::default(),
             Some(opts) => opts.clone(),
@@ -79,33 +102,25 @@ impl BoardPlugin {
                     })
                     .insert(Name::new("Background"));
 
-                for (y, line) in tile_map.iter().enumerate() {
-                    for (x, _tile) in line.iter().enumerate() {
-                        parent
-                            .spawn(SpriteBundle {
-                                sprite: Sprite {
-                                    color: Color::GRAY,
-                                    custom_size: Some(Vec2::splat(
-                                        tile_size - options.tile_padding as f32,
-                                    )),
-                                    ..Default::default()
-                                },
-                                transform: Transform::from_xyz(
-                                    (x as f32 * tile_size) + (tile_size / 2.),
-                                    (y as f32 * tile_size) + (tile_size / 2.),
-                                    1.,
-                                ),
-                                ..Default::default()
-                            })
-                            .insert(Name::new(format!("Tile ({}, {})", x, y)))
-                            // We add the `Coordinates` component to our tile entity
-                            .insert(Coordinates {
-                                x: x as u16,
-                                y: y as u16,
-                            });
-                    }
-                }
+                Self::spawn_tiles(
+                    parent,
+                    &tile_map,
+                    tile_size,
+                    options.tile_padding,
+                    Color::GRAY,
+                    bomb_sprite,
+                    font,
+                )
             });
+
+        commands.insert_resource(Board {
+            tile_map,
+            bounds: Bounds2 {
+                position: Vec2::new(board_position.x, board_position.y),
+                size: board_size,
+            },
+            tile_size,
+        });
     }
 
     fn adaptive_tile_size(
@@ -121,5 +136,102 @@ impl BoardPlugin {
         }
 
         return 0.;
+    }
+
+    fn bomb_count_text_bundle(count: u8, font: Handle<Font>, size: f32) -> Text2dBundle {
+        let (text, color) = (
+            count.to_string(),
+            match count {
+                1 => Color::WHITE,
+                2 => Color::GREEN,
+                3 => Color::YELLOW,
+                4 => Color::ORANGE,
+                _ => Color::PURPLE,
+            },
+        );
+
+        Text2dBundle {
+            text: Text {
+                sections: vec![TextSection {
+                    value: text,
+                    style: TextStyle {
+                        color,
+                        font,
+                        font_size: size,
+                    },
+                }],
+                alignment: TextAlignment::Center,
+                ..default()
+            },
+            transform: Transform::from_xyz(0., 0., 1.),
+            ..default()
+        }
+    }
+
+    fn spawn_tiles(
+        parent: &mut ChildBuilder,
+        tile_map: &TileMap,
+        size: f32,
+        padding: f32,
+        color: Color,
+        bomb_image: Handle<Image>,
+        font: Handle<Font>,
+    ) {
+        for (y, line) in tile_map.iter().enumerate() {
+            for (x, tile) in line.iter().enumerate() {
+                let coordinates = Coordinates {
+                    x: x as u16,
+                    y: y as u16,
+                };
+
+                let mut cmd = parent.spawn_empty();
+                // parent.spawn_empty
+
+                cmd.insert(SpriteBundle {
+                    sprite: Sprite {
+                        color,
+                        custom_size: Some(Vec2::splat(size - padding as f32)),
+                        ..Default::default()
+                    },
+                    transform: Transform::from_xyz(
+                        (x as f32 * size) + (size / 2.),
+                        (y as f32 * size) + (size / 2.),
+                        1.,
+                    ),
+                    ..Default::default()
+                })
+                .insert(Name::new(format!("Tile ({}, {})", x, y)))
+                // We add the `Coordinates` component to our tile entity
+                .insert(coordinates);
+
+                match tile {
+                    Tile::Bomb => {
+                        cmd.insert(Bomb);
+                        cmd.with_children(|parent| {
+                            parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    custom_size: Some(Vec2::splat(size - padding as f32)),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(0., 0., 1.),
+                                texture: bomb_image.clone(),
+                                ..default()
+                            });
+                        });
+                    }
+                    Tile::BombNeighbor(v) => {
+                        cmd.insert(BombNeighbor { count: *v });
+                        cmd.with_children(|parent| {
+                            parent.spawn(Self::bomb_count_text_bundle(
+                                *v,
+                                font.clone(),
+                                size - padding,
+                            ));
+                        });
+                    }
+                    _ => (),
+                }
+            }
+        }
     }
 }

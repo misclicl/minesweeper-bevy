@@ -1,12 +1,13 @@
+use bevy::{prelude::Resource};
 #[cfg(feature = "debug")]
 use colored::Colorize;
 
-// Enum describing a Minesweeper tile
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Resource)]
+// #[reflect(Resource)]
 pub enum Tile {
     Bomb,
     BombNeighbor(u8),
-    Empty
+    Empty,
 }
 
 impl Tile {

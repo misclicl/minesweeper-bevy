@@ -3,9 +3,7 @@ use std::ops::{Add, Sub};
 
 use bevy::prelude::Component;
 
-// TODO:????
-// #[cfg_attr(feature = "debug", derive(bevy_inspector_egui::InspectorOptions))]
-#[derive(bevy_inspector_egui::InspectorOptions)]
+#[cfg_attr(feature="debug", derive(bevy_inspector_egui::InspectorOptions))]
 #[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Component)]
 pub struct Coordinates {
     pub x: u16,

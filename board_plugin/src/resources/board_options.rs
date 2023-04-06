@@ -1,19 +1,22 @@
-use bevy::prelude::{Vec3, Resource};
+use bevy::{
+    prelude::{Resource, Vec3, ReflectResource}, reflect::Reflect,
+};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum TileSize {
     Fixed(f32),
     Adaptive { min: f32, max: f32 },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Reflect)]
 pub enum BoardPosition {
-    Centered {offset: Vec3},
+    Centered { offset: Vec3 },
     Custom(Vec3),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Resource)]
+#[derive(Debug, Clone, Serialize, Deserialize, Resource, Reflect)]
+#[reflect(Resource)]
 pub struct BoardOptions {
     pub map_size: (u16, u16),
     pub bomb_count: u16,
@@ -32,7 +35,7 @@ impl Default for TileSize {
 impl Default for BoardPosition {
     fn default() -> Self {
         Self::Centered {
-            offset: Default::default()
+            offset: Default::default(),
         }
     }
 }

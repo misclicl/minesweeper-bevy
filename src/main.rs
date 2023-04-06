@@ -25,9 +25,9 @@ fn main() {
     app.add_plugin(BoardPlugin);
 
     app.insert_resource(BoardOptions {
-        map_size: (24, 24),
-        tile_size: board_plugin::resources::TileSize::Adaptive { min: 5.0, max: 50.0 },
-        bomb_count: 40,
+        map_size: (16, 16),
+        tile_size: board_plugin::resources::TileSize::Adaptive { min: 5.0, max: 25.0 },
+        bomb_count: 42,
         tile_padding: 3.0,
         ..Default::default()
     });
