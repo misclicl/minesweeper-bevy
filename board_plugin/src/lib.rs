@@ -1,17 +1,17 @@
+mod bounds;
 pub mod components;
 pub mod resources;
 mod systems;
-mod bounds;
 
 use bevy::log;
 use bevy::prelude::*;
 
+use resources::board::Board;
 use resources::tile::Tile;
 use resources::tile_map::TileMap;
 use resources::BoardOptions;
 use resources::BoardPosition;
 use resources::TileSize;
-use resources::board::Board;
 
 use bounds::Bounds2;
 use components::BombNeighbor;
@@ -138,7 +138,7 @@ impl BoardPlugin {
         return 0.;
     }
 
-    fn bomb_count_text_bundle(count: u8, font: Handle<Font>, size: f32) -> Text2dBundle {
+    fn bomb_count_text_bundle(count: u8, font: Handle<Font>, font_size: f32) -> Text2dBundle {
         let (text, color) = (
             count.to_string(),
             match count {
@@ -150,20 +150,16 @@ impl BoardPlugin {
             },
         );
 
+        let text_style = TextStyle {
+            color,
+            font,
+            font_size,
+        };
+
         Text2dBundle {
-            text: Text {
-                sections: vec![TextSection {
-                    value: text,
-                    style: TextStyle {
-                        color,
-                        font,
-                        font_size: size,
-                    },
-                }],
-                alignment: TextAlignment::Center,
-                ..default()
-            },
-            transform: Transform::from_xyz(0., 0., 1.),
+            text: Text::from_section(text, text_style.clone())
+                .with_alignment(TextAlignment::Center),
+            transform: Transform::from_xyz(0., 2.5, 1.),
             ..default()
         }
     }
@@ -219,11 +215,11 @@ impl BoardPlugin {
                             });
                         });
                     }
-                    Tile::BombNeighbor(v) => {
-                        cmd.insert(BombNeighbor { count: *v });
+                    Tile::BombNeighbor(count) => {
+                        cmd.insert(BombNeighbor { count: *count });
                         cmd.with_children(|parent| {
                             parent.spawn(Self::bomb_count_text_bundle(
-                                *v,
+                                *count,
                                 font.clone(),
                                 size - padding,
                             ));
