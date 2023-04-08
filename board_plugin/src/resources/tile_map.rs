@@ -4,7 +4,7 @@ use rand::{thread_rng, Rng};
 
 use std::ops::{Deref, DerefMut};
 
-const SQUARE_COORDINATES: [(i8, i8); 8] = [
+const NEIGHBOR_COORDS: [(i8, i8); 8] = [
     // Bottom left
     (-1, -1),
     // Bottom
@@ -69,7 +69,7 @@ impl TileMap {
         &self,
         coordinates: Coordinates,
     ) -> impl Iterator<Item = Coordinates> {
-        SQUARE_COORDINATES
+        NEIGHBOR_COORDS
             .iter()
             .copied()
             .map(move |tuple| coordinates + tuple)

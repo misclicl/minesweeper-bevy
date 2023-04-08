@@ -1,11 +1,14 @@
 mod bounds;
+mod events;
+mod systems;
+mod queue;
 pub mod components;
 pub mod resources;
-mod systems;
 
 use bevy::log;
 use bevy::prelude::*;
 
+use bevy::utils::HashMap;
 use resources::board::Board;
 use resources::tile::Tile;
 use resources::tile_map::TileMap;
@@ -14,10 +17,11 @@ use resources::BoardPosition;
 use resources::TileSize;
 
 use bounds::Bounds2;
+use components::Bomb;
 use components::BombNeighbor;
 use components::Coordinates;
-// use components::Uncover;
-use components::Bomb;
+
+use crate::events::TileTriggerEvent;
 
 pub struct BoardPlugin;
 
@@ -25,6 +29,9 @@ impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(Self::create_board);
         app.add_system(systems::input::handle_input);
+        app.add_system(systems::uncover::trigger_event_handler);
+        app.add_system(systems::uncover::uncover_tiles);
+        app.add_event::<TileTriggerEvent>();
         log::info!("Loaded Board Plugin");
 
         #[cfg(feature = "debug")]
@@ -82,6 +89,8 @@ impl BoardPlugin {
             BoardPosition::Custom(p) => p,
         };
 
+        let mut covered_tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
+
         commands
             .spawn(SpatialBundle {
                 visibility: Visibility::Visible,
@@ -110,6 +119,8 @@ impl BoardPlugin {
                     Color::GRAY,
                     bomb_sprite,
                     font,
+                    Color::DARK_GRAY,
+                    &mut covered_tiles,
                 )
             });
 
@@ -120,6 +131,7 @@ impl BoardPlugin {
                 size: board_size,
             },
             tile_size,
+            covered_tiles,
         });
     }
 
@@ -172,6 +184,8 @@ impl BoardPlugin {
         color: Color,
         bomb_image: Handle<Image>,
         font: Handle<Font>,
+        covered_tile_color: Color,
+        covered_tiles: &mut HashMap<Coordinates, Entity>,
     ) {
         for (y, line) in tile_map.iter().enumerate() {
             for (x, tile) in line.iter().enumerate() {
@@ -181,9 +195,9 @@ impl BoardPlugin {
                 };
 
                 let mut cmd = parent.spawn_empty();
-                // parent.spawn_empty
 
-                cmd.insert(SpriteBundle {
+                // spawn tile base
+                let base = cmd.insert(SpriteBundle {
                     sprite: Sprite {
                         color,
                         custom_size: Some(Vec2::splat(size - padding as f32)),
@@ -195,34 +209,56 @@ impl BoardPlugin {
                         1.,
                     ),
                     ..Default::default()
-                })
-                .insert(Name::new(format!("Tile ({}, {})", x, y)))
                 // We add the `Coordinates` component to our tile entity
-                .insert(coordinates);
+                }).insert(coordinates);
 
+                base.insert(Name::new(format!("Tile: Base ({}, {}, {:?})", x, y, base.id())));
+
+                // spawn tile cover
+                cmd.with_children(|parent| {
+                    let entity = parent
+                        .spawn(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(Vec2::splat(size - padding)),
+                                color: covered_tile_color,
+                                ..Default::default()
+                            },
+                            transform: Transform::from_xyz(0., 0., 2.),
+                            ..Default::default()
+                        })
+                        .insert(Name::new("Tile: Cover"))
+                        .id();
+                    covered_tiles.insert(coordinates, entity);
+                });
+
+                // spawn tile face
                 match tile {
                     Tile::Bomb => {
                         cmd.insert(Bomb);
                         cmd.with_children(|parent| {
-                            parent.spawn(SpriteBundle {
-                                sprite: Sprite {
-                                    custom_size: Some(Vec2::splat(size - padding as f32)),
+                            parent
+                                .spawn(SpriteBundle {
+                                    sprite: Sprite {
+                                        custom_size: Some(Vec2::splat(size - padding as f32)),
+                                        ..default()
+                                    },
+                                    transform: Transform::from_xyz(0., 0., 1.),
+                                    texture: bomb_image.clone(),
                                     ..default()
-                                },
-                                transform: Transform::from_xyz(0., 0., 1.),
-                                texture: bomb_image.clone(),
-                                ..default()
-                            });
+                                })
+                                .insert(Name::new("Tile: Bomb face"));
                         });
                     }
                     Tile::BombNeighbor(count) => {
                         cmd.insert(BombNeighbor { count: *count });
                         cmd.with_children(|parent| {
-                            parent.spawn(Self::bomb_count_text_bundle(
-                                *count,
-                                font.clone(),
-                                size - padding,
-                            ));
+                            parent
+                                .spawn(Self::bomb_count_text_bundle(
+                                    *count,
+                                    font.clone(),
+                                    size - padding,
+                                ))
+                                .insert(Name::new("Tile: Neighbor face"));
                         });
                     }
                     _ => (),

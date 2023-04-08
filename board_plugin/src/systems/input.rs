@@ -2,11 +2,13 @@ use bevy::log;
 use bevy::prelude::*;
 
 use crate::Board;
+use crate::events::TileTriggerEvent;
 
 pub fn handle_input(
     windows: Query<&Window>,
     board: Res<Board>,
-    mouse_button_input: Res<Input<MouseButton>>
+    mouse_button_input: Res<Input<MouseButton>>,
+    mut tile_trigger_ewr: EventWriter<TileTriggerEvent>
 ) {
     let window = windows.get_single().unwrap();
     let position = window.cursor_position();
@@ -18,6 +20,8 @@ pub fn handle_input(
             if mouse_button_input.just_released(MouseButton::Left) {
                 info!("left mouse just released");
                 log::info!("Trying to uncover tile on {}", coordinates);
+
+                tile_trigger_ewr.send(TileTriggerEvent(coordinates));
             }
             if mouse_button_input.just_released(MouseButton::Right) {
                 info!("right mouse just released");
