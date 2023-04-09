@@ -66,10 +66,10 @@ impl Board {
                 for neighbor_coordinates in
                     self.tile_map.get_neighbor_coordinates(current_coordinates)
                 {
-                    // let is_empty = self.tile_map.is_empty_at(neighbor_coordinates);
+                    let is_empty = self.tile_map.is_empty_at(current_coordinates);
                     let is_bomb_at = self.tile_map.is_bomb_at(neighbor_coordinates);
                     // if is_empty {
-                    if !is_bomb_at {
+                    if !is_bomb_at && is_empty {
                         if let Some(entity) = self.get_tile_entity(&neighbor_coordinates) {
                             if !visited.contains(entity) && !discovered.contains(entity) {
                                 queue.enqueue(neighbor_coordinates);

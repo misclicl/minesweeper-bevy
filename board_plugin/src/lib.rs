@@ -53,7 +53,6 @@ impl BoardPlugin {
     pub fn create_board(
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
-        // window: Res<WindowDescriptor>
         window: Query<&Window>,
         asset_server: Res<AssetServer>,
     ) {

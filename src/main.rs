@@ -28,7 +28,7 @@ fn main() {
         map_size: (16, 16),
         // map_size: (4, 4),
         tile_size: board_plugin::resources::TileSize::Adaptive { min: 5.0, max: 25.0 },
-        bomb_count: 48,
+        bomb_count: 32,
         // bomb_count: 1,
         tile_padding: 3.0,
         ..Default::default()
