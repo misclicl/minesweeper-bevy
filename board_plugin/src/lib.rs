@@ -1,14 +1,15 @@
 mod bounds;
-mod events;
-mod systems;
-mod queue;
 pub mod components;
+mod events;
+mod queue;
 pub mod resources;
+mod systems;
 
 use bevy::log;
 use bevy::prelude::*;
 
 use bevy::utils::HashMap;
+use components::TileCover;
 use resources::board::Board;
 use resources::tile::Tile;
 use resources::tile_map::TileMap;
@@ -21,6 +22,7 @@ use components::Bomb;
 use components::BombNeighbor;
 use components::Coordinates;
 
+use crate::components::Covered;
 use crate::events::TileTriggerEvent;
 
 pub struct BoardPlugin;
@@ -29,8 +31,9 @@ impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(Self::create_board);
         app.add_system(systems::input::handle_input);
-        app.add_system(systems::uncover::trigger_event_handler);
-        app.add_system(systems::uncover::uncover_tiles);
+        app.add_system(systems::uncover::handle_discover_event);
+        // app.add_system(systems::uncover::uncover_tiles);
+        app.add_system(systems::uncover::change_detection);
         app.add_event::<TileTriggerEvent>();
         log::info!("Loaded Board Plugin");
 
@@ -39,8 +42,8 @@ impl Plugin for BoardPlugin {
             app.register_type::<BombNeighbor>();
             app.register_type::<Bomb>();
             app.register_type::<BoardOptions>();
+            app.register_type::<Covered>();
             // app.register_type::<Board>();
-            // app.register_type::<Uncover>();
         }
     }
 }
@@ -90,6 +93,8 @@ impl BoardPlugin {
         };
 
         let mut covered_tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
+        let mut tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
+        let mut safe_start = None;
 
         commands
             .spawn(SpatialBundle {
@@ -121,8 +126,17 @@ impl BoardPlugin {
                     font,
                     Color::DARK_GRAY,
                     &mut covered_tiles,
+                    &mut tiles,
+                    &mut safe_start,
                 )
             });
+
+        if options.safe_start {
+            // TODO: this allows for safe start
+            // if let Some(entity) = safe_start {
+            //     commands.entity(entity).insert(Uncover);
+            // }
+        }
 
         commands.insert_resource(Board {
             tile_map,
@@ -131,7 +145,7 @@ impl BoardPlugin {
                 size: board_size,
             },
             tile_size,
-            covered_tiles,
+            tiles,
         });
     }
 
@@ -186,6 +200,8 @@ impl BoardPlugin {
         font: Handle<Font>,
         covered_tile_color: Color,
         covered_tiles: &mut HashMap<Coordinates, Entity>,
+        tiles: &mut HashMap<Coordinates, Entity>,
+        safe_start_entity: &mut Option<Entity>,
     ) {
         for (y, line) in tile_map.iter().enumerate() {
             for (x, tile) in line.iter().enumerate() {
@@ -194,25 +210,40 @@ impl BoardPlugin {
                     y: y as u16,
                 };
 
+                let covered = Covered {
+                    is_covered: true,
+                };
+
                 let mut cmd = parent.spawn_empty();
 
                 // spawn tile base
-                let base = cmd.insert(SpriteBundle {
-                    sprite: Sprite {
-                        color,
-                        custom_size: Some(Vec2::splat(size - padding as f32)),
-                        ..Default::default()
-                    },
-                    transform: Transform::from_xyz(
-                        (x as f32 * size) + (size / 2.),
-                        (y as f32 * size) + (size / 2.),
-                        1.,
-                    ),
-                    ..Default::default()
-                // We add the `Coordinates` component to our tile entity
-                }).insert(coordinates);
+                let base_command = cmd
+                    .insert(SpriteBundle {
+                        sprite: Sprite {
+                            color,
+                            custom_size: Some(Vec2::splat(size - padding as f32)),
+                            ..Default::default()
+                        },
+                        transform: Transform::from_xyz(
+                            (x as f32 * size) + (size / 2.),
+                            (y as f32 * size) + (size / 2.),
+                            1.,
+                        ),
+                        ..Default::default() // We add the `Coordinates` component to our tile entity
+                    })
+                    .insert(covered)
+                    .insert(coordinates);
 
-                base.insert(Name::new(format!("Tile: Base ({}, {}, {:?})", x, y, base.id())));
+                let tile_entity = base_command.id();
+
+                tiles.insert(coordinates, tile_entity);
+
+                base_command.insert(Name::new(format!(
+                    "Tile: Base ({}, {}, {:?})",
+                    x,
+                    y,
+                    tile_entity
+                )));
 
                 // spawn tile cover
                 cmd.with_children(|parent| {
@@ -224,11 +255,18 @@ impl BoardPlugin {
                                 ..Default::default()
                             },
                             transform: Transform::from_xyz(0., 0., 2.),
+                            visibility: Visibility::Visible,
                             ..Default::default()
                         })
                         .insert(Name::new("Tile: Cover"))
+                        .insert(TileCover)
                         .id();
+                    
                     covered_tiles.insert(coordinates, entity);
+                    
+                    if safe_start_entity.is_none() && *tile == Tile::Empty {
+                        *safe_start_entity = Some(entity);
+                    }
                 });
 
                 // spawn tile face

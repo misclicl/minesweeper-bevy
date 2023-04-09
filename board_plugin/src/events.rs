@@ -1,4 +1,6 @@
-use crate::components::Coordinates;
+use bevy::prelude::Entity;
+
+// use crate::components::Coordinates;
 
 #[derive(Debug, Copy, Clone)]
-pub struct TileTriggerEvent(pub Coordinates);
+pub struct TileTriggerEvent(pub Entity);

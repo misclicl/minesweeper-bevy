@@ -1,9 +1,11 @@
-pub use { coordinates::* };
 pub use bomb::Bomb;
 pub use bomb_neighbor::BombNeighbor;
-pub use uncover::Uncover;
+pub use coordinates::*;
+pub use covered::Covered;
+pub use tile_cover::TileCover;
 
-mod coordinates;
+mod tile_cover;
 mod bomb;
 mod bomb_neighbor;
-mod uncover;
+mod coordinates;
+mod covered;

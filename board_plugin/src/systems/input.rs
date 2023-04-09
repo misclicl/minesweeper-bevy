@@ -18,11 +18,13 @@ pub fn handle_input(
 
         if let Some(coordinates) = tile_coordinates {
             if mouse_button_input.just_released(MouseButton::Left) {
-                info!("left mouse just released");
-                log::info!("Trying to uncover tile on {}", coordinates);
+                let tile = board.get_tile_entity(&coordinates).unwrap();
+                tile_trigger_ewr.send(TileTriggerEvent(*tile));
 
-                tile_trigger_ewr.send(TileTriggerEvent(coordinates));
+                log::info!("left mouse just released");
+                log::info!("Trying to uncover tile on {}", coordinates);
             }
+
             if mouse_button_input.just_released(MouseButton::Right) {
                 info!("right mouse just released");
                 log::info!("Trying to mark tile on {}", coordinates);

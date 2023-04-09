@@ -1,10 +1,9 @@
-// use std::collections::HashMap;
-
+use bevy::log;
 use bevy::prelude::*;
-use bevy::utils::HashMap;
+use bevy::utils::{HashMap, HashSet};
 
 use crate::bounds::Bounds2;
-
+use crate::queue::Queue;
 use crate::{Coordinates, TileMap};
 
 // #[derive(Default, Debug, Clone, Serialize, Deserialize, Resource, Reflect)]
@@ -14,8 +13,7 @@ pub struct Board {
     pub tile_map: TileMap,
     pub bounds: Bounds2,
     pub tile_size: f32,
-    // Storing tile covers
-    pub covered_tiles: HashMap<Coordinates, Entity>,
+    pub tiles: HashMap<Coordinates, Entity>,
 }
 
 impl Board {
@@ -41,31 +39,52 @@ impl Board {
         })
     }
 
-    pub fn try_uncover_tile(&mut self, coords: &Coordinates) -> Option<Entity> {
-        self.covered_tiles.remove(coords)
+    pub fn get_tile_entity(&self, coordinates: &Coordinates) -> Option<&Entity> {
+        self.tiles.get(coordinates)
     }
 
-    /// Returns an entity of type Tile Cover
-    pub fn get_tile_cover_entity(&self, coordinates: &Coordinates) -> Option<&Entity> {
-        self.covered_tiles.get(coordinates)
-    }
-
-    pub fn get_adjacent_cover_tiles(&self, coord: Coordinates) -> Vec<Entity> {
+    pub fn get_adjacent_tiles(&self, coordinates: Coordinates) -> Vec<Entity> {
         self.tile_map
-            .get_neighbor_coordinates(coord)
-            .filter_map(|c| self.covered_tiles.get(&c))
+            .get_neighbor_coordinates(coordinates)
+            .filter_map(|neighbor_coordinates| self.tiles.get(&neighbor_coordinates))
             .copied()
             .collect()
     }
 
-    /// Returns coordinates of adjacent cover tiles
-    pub fn get_adjacent_cover_tiles_coordinates(
-        &self,
-        coordinates: Coordinates,
-    ) -> Vec<Coordinates> {
-        self.tile_map
-            .get_neighbor_coordinates(coordinates)
-            .filter(|c| self.covered_tiles.contains_key(&c))
-            .collect()
+    pub fn flood_discovery(&self, coordinates: &Coordinates) -> HashSet<&Entity> {
+        let mut queue = Queue::from([*coordinates]);
+        let mut visited: HashSet<&Entity> = HashSet::new();
+        let mut discovered: HashSet<&Entity> = HashSet::new();
+
+        let mut counter = 0;
+        // TODO: Floods to all non-bomb cells
+        while let Some(current_coordinates) = queue.dequeue() {
+            counter += 1;
+            if let Some(entity) = self.get_tile_entity(&current_coordinates) {
+                visited.insert(entity);
+
+                for neighbor_coordinates in
+                    self.tile_map.get_neighbor_coordinates(current_coordinates)
+                {
+                    // let is_empty = self.tile_map.is_empty_at(neighbor_coordinates);
+                    let is_bomb_at = self.tile_map.is_bomb_at(neighbor_coordinates);
+                    // if is_empty {
+                    if !is_bomb_at {
+                        if let Some(entity) = self.get_tile_entity(&neighbor_coordinates) {
+                            if !visited.contains(entity) && !discovered.contains(entity) {
+                                queue.enqueue(neighbor_coordinates);
+                            }
+                            discovered.insert(entity);
+                        }
+                    }
+                }
+            }
+        }
+
+        // TODO: no need for two objects?
+        log::info!("{:?}", visited);
+        log::info!("Counter: {:?}", counter);
+        // result
+        visited
     }
 }

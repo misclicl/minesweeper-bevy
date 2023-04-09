@@ -1,4 +1,4 @@
-use bevy::{prelude::Resource};
+use bevy::prelude::Resource;
 #[cfg(feature = "debug")]
 use colored::Colorize;
 
@@ -13,6 +13,9 @@ pub enum Tile {
 impl Tile {
     pub const fn is_bomb(&self) -> bool {
         matches!(self, Self::Bomb)
+    }
+    pub const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
     }
 
     #[cfg(feature = "debug")]

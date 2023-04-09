@@ -75,6 +75,13 @@ impl TileMap {
             .map(move |tuple| coordinates + tuple)
     }
 
+    pub fn is_empty_at(&self, coordinates: Coordinates) -> bool {
+        if coordinates.x >= self.width || coordinates.y >= self.height {
+            return false;
+        };
+        self.map[coordinates.y as usize][coordinates.x as usize].is_empty()
+    }
+
     pub fn is_bomb_at(&self, coordinates: Coordinates) -> bool {
         if coordinates.x >= self.width || coordinates.y >= self.height {
             return false;
