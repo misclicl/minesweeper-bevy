@@ -1,5 +1,6 @@
 use bevy::log;
 use bevy::prelude::*;
+use bevy::utils::HashSet;
 
 use crate::components::Covered;
 use crate::components::TileCover;
@@ -13,25 +14,26 @@ pub fn handle_discover_event(
     for trigger_event in tile_trigger_event_reader.iter() {
         let entity = trigger_event.0;
 
-        let (mut covered, coordinates, _) = tiles.get_mut(entity).unwrap();
-        covered.is_covered = false;
+        if let Ok((mut covered, coordinates, _)) = tiles.get_mut(entity) {
+            covered.is_covered = false;
 
 
-        if !board.tile_map.is_empty_at(*coordinates) {
-            return;
-        }
+            if !board.tile_map.is_empty_at(*coordinates) {
+                return;
+            }
 
-        let temp = board.flood_discovery(coordinates);
-
-        for (mut covered, _, entity) in tiles.iter_mut() {
-            if temp.contains(&entity) {
-                covered.is_covered = false;
+            let discovered_entities = board.flood_discovery(coordinates);
+            let discovered_entities_set = HashSet::from(discovered_entities);
+            for (mut covered, _, entity) in tiles.iter_mut() {
+                if discovered_entities_set.contains(&entity) {
+                    covered.is_covered = false;
+                }
             }
         }
     }
 }
 
-pub fn change_detection(
+pub fn discover_tiles(
     query: Query<(Entity, &Covered, &Children), Changed<Covered>>,
     mut q_children: Query<(&mut Visibility, With<TileCover>)>,
 ) {

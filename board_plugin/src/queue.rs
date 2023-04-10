@@ -5,6 +5,7 @@ pub struct Queue<T> {
 }
 
 impl<T> Queue<T> {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Queue {
             items: VecDeque::new(),
@@ -19,6 +20,7 @@ impl<T> Queue<T> {
         self.items.push_back(item);
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.items.len() == 0
     }

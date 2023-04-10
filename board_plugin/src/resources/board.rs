@@ -14,6 +14,7 @@ pub struct Board {
     pub bounds: Bounds2,
     pub tile_size: f32,
     pub tiles: HashMap<Coordinates, Entity>,
+    pub entity: Entity,
 }
 
 impl Board {
@@ -56,35 +57,29 @@ impl Board {
         let mut visited: HashSet<&Entity> = HashSet::new();
         let mut discovered: HashSet<&Entity> = HashSet::new();
 
-        let mut counter = 0;
-        // TODO: Floods to all non-bomb cells
         while let Some(current_coordinates) = queue.dequeue() {
-            counter += 1;
             if let Some(entity) = self.get_tile_entity(&current_coordinates) {
                 visited.insert(entity);
 
-                for neighbor_coordinates in
-                    self.tile_map.get_neighbor_coordinates(current_coordinates)
-                {
-                    let is_empty = self.tile_map.is_empty_at(current_coordinates);
-                    let is_bomb_at = self.tile_map.is_bomb_at(neighbor_coordinates);
-                    // if is_empty {
-                    if !is_bomb_at && is_empty {
-                        if let Some(entity) = self.get_tile_entity(&neighbor_coordinates) {
-                            if !visited.contains(entity) && !discovered.contains(entity) {
-                                queue.enqueue(neighbor_coordinates);
+                if self.tile_map.is_empty_at(current_coordinates) {
+                    for neighbor_coordinates in
+                        self.tile_map.get_neighbor_coordinates(current_coordinates)
+                    {
+                        let is_bomb_at = self.tile_map.is_bomb_at(neighbor_coordinates);
+
+                        if !is_bomb_at {
+                            if let Some(entity) = self.get_tile_entity(&neighbor_coordinates) {
+                                if !visited.contains(entity) && !discovered.contains(entity) {
+                                    queue.enqueue(neighbor_coordinates);
+                                }
+                                discovered.insert(entity);
                             }
-                            discovered.insert(entity);
                         }
                     }
                 }
             }
         }
 
-        // TODO: no need for two objects?
-        log::info!("{:?}", visited);
-        log::info!("Counter: {:?}", counter);
-        // result
         visited
     }
 }

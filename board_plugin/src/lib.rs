@@ -25,36 +25,50 @@ use components::Coordinates;
 use crate::components::Covered;
 use crate::events::TileTriggerEvent;
 
-pub struct BoardPlugin;
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
+pub enum AppState {
+    #[default]
+    InGame,
+    Out,
+}
 
-impl Plugin for BoardPlugin {
+pub struct BoardPlugin<T> {
+    pub state: T,
+}
+
+impl<T: States> Plugin for BoardPlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(Self::create_board);
-        app.add_system(systems::input::handle_input);
-        app.add_system(systems::uncover::handle_discover_event);
-        // app.add_system(systems::uncover::uncover_tiles);
-        app.add_system(systems::uncover::change_detection);
-        app.add_event::<TileTriggerEvent>();
-        log::info!("Loaded Board Plugin");
+        app.add_system(Self::create_board.in_schedule(OnEnter(AppState::InGame)))
+            .add_systems(
+                (
+                    systems::input::handle_input,
+                    systems::uncover::handle_discover_event,
+                    systems::uncover::discover_tiles,
+                )
+                    .in_set(OnUpdate(AppState::InGame)),
+            )
+            .add_system(Self::cleanup_board.in_schedule(OnExit(AppState::InGame)))
+            .add_event::<TileTriggerEvent>();
 
+        log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
         {
             app.register_type::<BombNeighbor>();
             app.register_type::<Bomb>();
             app.register_type::<BoardOptions>();
             app.register_type::<Covered>();
-            // app.register_type::<Board>();
         }
     }
 }
 
-impl BoardPlugin {
+impl<T> BoardPlugin<T> {
     /// System to generate the complete board
     pub fn create_board(
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         window: Query<&Window>,
         asset_server: Res<AssetServer>,
+        mut tile_trigger_ewr: EventWriter<TileTriggerEvent>,
     ) {
         let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
         let bomb_sprite: Handle<Image> = asset_server.load("sprites/bomb.png");
@@ -95,7 +109,7 @@ impl BoardPlugin {
         let mut tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
         let mut safe_start = None;
 
-        commands
+        let board_entity = commands
             .spawn(SpatialBundle {
                 visibility: Visibility::Visible,
                 transform: Transform::from_translation(board_position.into()),
@@ -128,13 +142,13 @@ impl BoardPlugin {
                     &mut tiles,
                     &mut safe_start,
                 )
-            });
+            })
+            .id();
 
         if options.safe_start {
-            // TODO: this allows for safe start
-            // if let Some(entity) = safe_start {
-            //     commands.entity(entity).insert(Uncover);
-            // }
+            if let Some(entity) = safe_start {
+                tile_trigger_ewr.send(TileTriggerEvent(entity));
+            }
         }
 
         commands.insert_resource(Board {
@@ -145,6 +159,7 @@ impl BoardPlugin {
             },
             tile_size,
             tiles,
+            entity: board_entity,
         });
     }
 
@@ -209,9 +224,7 @@ impl BoardPlugin {
                     y: y as u16,
                 };
 
-                let covered = Covered {
-                    is_covered: true,
-                };
+                let covered = Covered { is_covered: true };
 
                 let mut cmd = parent.spawn_empty();
 
@@ -239,10 +252,12 @@ impl BoardPlugin {
 
                 base_command.insert(Name::new(format!(
                     "Tile: Base ({}, {}, {:?})",
-                    x,
-                    y,
-                    tile_entity
+                    x, y, tile_entity
                 )));
+
+                if safe_start_entity.is_none() && *tile == Tile::Empty {
+                    *safe_start_entity = Some(tile_entity);
+                }
 
                 // spawn tile cover
                 cmd.with_children(|parent| {
@@ -254,15 +269,16 @@ impl BoardPlugin {
                                 ..Default::default()
                             },
                             transform: Transform::from_xyz(0., 0., 2.),
+                            // questinable??
                             visibility: Visibility::Visible,
                             ..Default::default()
                         })
                         .insert(Name::new("Tile: Cover"))
                         .insert(TileCover)
                         .id();
-                    
+
                     covered_tiles.insert(coordinates, entity);
-                    
+
                     if safe_start_entity.is_none() && *tile == Tile::Empty {
                         *safe_start_entity = Some(entity);
                     }
@@ -302,5 +318,11 @@ impl BoardPlugin {
                 }
             }
         }
+    }
+
+    fn cleanup_board(board: Res<Board>, mut commands: Commands) {
+        info!("Cleaning");
+        commands.entity(board.entity).despawn_recursive();
+        commands.remove_resource::<Board>();
     }
 }
