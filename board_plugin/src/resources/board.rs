@@ -1,4 +1,3 @@
-use bevy::log;
 use bevy::prelude::*;
 use bevy::utils::{HashMap, HashSet};
 
@@ -10,14 +9,37 @@ use crate::{Coordinates, TileMap};
 #[derive(Debug, Clone, Resource)]
 // #[reflect(Resource)]
 pub struct Board {
-    pub tile_map: TileMap,
+    pub entity: Entity,
+
     pub bounds: Bounds2,
     pub tile_size: f32,
+
+    pub tile_map: TileMap,
     pub tiles: HashMap<Coordinates, Entity>,
-    pub entity: Entity,
+
+    pub coordinates_discovered: HashSet<Coordinates>,
+    pub coordinates_marked: HashSet<Coordinates>,
 }
 
 impl Board {
+    pub fn new(
+        entity: Entity,
+        bounds: Bounds2,
+        tile_size: f32,
+        tile_map: TileMap,
+        tiles: HashMap<Coordinates, Entity>,
+    ) -> Self {
+        Board {
+            entity,
+            bounds,
+            tile_size,
+            tile_map,
+            coordinates_discovered: HashSet::with_capacity(tiles.len()),
+            coordinates_marked: HashSet::with_capacity(tiles.len()),
+            tiles,
+        }
+    }
+
     pub fn mouse_position(&self, window: &Window, mouse_position: Vec2) -> Option<Coordinates> {
         let window_size = Vec2::new(window.width(), window.height());
 
@@ -40,8 +62,8 @@ impl Board {
         })
     }
 
-    pub fn get_tile_entity(&self, coordinates: &Coordinates) -> Option<&Entity> {
-        self.tiles.get(coordinates)
+    pub fn get_tile_entity(&self, coordinates: Coordinates) -> Option<&Entity> {
+        self.tiles.get(&coordinates)
     }
 
     pub fn get_adjacent_tiles(&self, coordinates: Coordinates) -> Vec<Entity> {
@@ -52,34 +74,74 @@ impl Board {
             .collect()
     }
 
-    pub fn flood_discovery(&self, coordinates: &Coordinates) -> HashSet<&Entity> {
+    pub fn flood_discovery(&mut self, coordinates: &Coordinates) -> HashSet<Entity> {
         let mut queue = Queue::from([*coordinates]);
-        let mut visited: HashSet<&Entity> = HashSet::new();
-        let mut discovered: HashSet<&Entity> = HashSet::new();
+        let mut discovered: HashMap<Entity, Coordinates> = HashMap::new();
+        let mut visited: HashSet<Entity> = HashSet::new();
 
         while let Some(current_coordinates) = queue.dequeue() {
-            if let Some(entity) = self.get_tile_entity(&current_coordinates) {
-                visited.insert(entity);
+            if let Some(entity) = self.get_tile_entity(current_coordinates) {
+                if self.is_flag_at(&current_coordinates) {
+                    continue;
+                }
 
-                if self.tile_map.is_empty_at(current_coordinates) {
-                    for neighbor_coordinates in
-                        self.tile_map.get_neighbor_coordinates(current_coordinates)
-                    {
-                        let is_bomb_at = self.tile_map.is_bomb_at(neighbor_coordinates);
+                discovered.insert(*entity, current_coordinates);
 
-                        if !is_bomb_at {
-                            if let Some(entity) = self.get_tile_entity(&neighbor_coordinates) {
-                                if !visited.contains(entity) && !discovered.contains(entity) {
-                                    queue.enqueue(neighbor_coordinates);
-                                }
-                                discovered.insert(entity);
-                            }
+                if !self.tile_map.is_empty_at(current_coordinates) {
+                    continue;
+                }
+
+                for neighbor_coordinates in
+                    self.tile_map.get_neighbor_coordinates(current_coordinates)
+                {
+                    if let Some(entity) = self.get_tile_entity(neighbor_coordinates) {
+                        if !visited.contains(entity) {
+                            queue.enqueue(neighbor_coordinates);
                         }
+                        visited.insert(*entity);
                     }
                 }
             }
         }
 
-        visited
+        for v in discovered.values() {
+            self.coordinates_discovered.insert(*v);
+        }
+
+        discovered.keys().cloned().collect()
+    }
+
+    fn unmark_tile(&mut self, coords: &Coordinates) -> bool {
+        self.coordinates_marked.remove(coords)
+    }
+
+    pub fn try_toggle_mark(&mut self, coordinates: Coordinates) -> bool {
+        let is_marked = if self.coordinates_marked.contains(&coordinates)
+            || self.coordinates_discovered.contains(&coordinates)
+        {
+            self.unmark_tile(&coordinates);
+            false
+        } else {
+            self.coordinates_marked.insert(coordinates);
+            true
+        };
+
+        info!("{}, {:?}", is_marked, self.coordinates_marked);
+        is_marked
+    }
+
+    pub fn is_completed(&self) -> bool {
+        let goal_count =
+            (self.tile_map.height * self.tile_map.width - self.tile_map.bomb_count) as usize;
+
+        if self.coordinates_discovered.len() == goal_count {
+            // TODO: corner case when last element is bomb
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_flag_at(&self, coordinates: &Coordinates) -> bool {
+        self.coordinates_marked.contains(&coordinates)
     }
 }

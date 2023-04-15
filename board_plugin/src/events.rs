@@ -1,6 +1,10 @@
 use bevy::prelude::Entity;
 
-// use crate::components::Coordinates;
+#[derive(Debug, Copy, Clone)]
+pub struct TileDiscoverEvent(pub Entity);
 
 #[derive(Debug, Copy, Clone)]
-pub struct TileTriggerEvent(pub Entity);
+pub struct BombExplosionEvent;
+
+#[derive(Debug, Copy, Clone)]
+pub struct TileMarkEvent(pub Entity);

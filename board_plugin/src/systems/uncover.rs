@@ -1,31 +1,42 @@
 use bevy::log;
 use bevy::prelude::*;
-use bevy::utils::HashSet;
 
 use crate::components::Covered;
 use crate::components::TileCover;
-use crate::{components::Coordinates, events::TileTriggerEvent, resources::board::Board};
+use crate::{
+    components::Coordinates,
+    events::{BombExplosionEvent, TileDiscoverEvent},
+    resources::board::Board,
+};
 
 pub fn handle_discover_event(
-    board: Res<Board>,
-    mut tile_trigger_event_reader: EventReader<TileTriggerEvent>,
+    mut board: ResMut<Board>,
+    mut bomb_explosion_event_writer: EventWriter<BombExplosionEvent>,
+    mut tile_trigger_event_reader: EventReader<TileDiscoverEvent>,
+
     mut tiles: Query<(&mut Covered, &Coordinates, Entity)>,
 ) {
     for trigger_event in tile_trigger_event_reader.iter() {
         let entity = trigger_event.0;
 
         if let Ok((mut covered, coordinates, _)) = tiles.get_mut(entity) {
+            if board.is_flag_at(coordinates) {
+                return;
+            }
             covered.is_covered = false;
 
+            if board.tile_map.is_bomb_at(*coordinates) {
+                log::info!("Boom!");
+                bomb_explosion_event_writer.send(BombExplosionEvent);
+            }
 
             if !board.tile_map.is_empty_at(*coordinates) {
                 return;
             }
 
-            let discovered_entities = board.flood_discovery(coordinates);
-            let discovered_entities_set = HashSet::from(discovered_entities);
+            let discovered_entities = board.flood_discovery(&coordinates).clone();
             for (mut covered, _, entity) in tiles.iter_mut() {
-                if discovered_entities_set.contains(&entity) {
+                if discovered_entities.contains(&entity) {
                     covered.is_covered = false;
                 }
             }

@@ -7,23 +7,28 @@ mod systems;
 
 use bevy::log;
 use bevy::prelude::*;
-
 use bevy::utils::HashMap;
-use components::TileCover;
+
 use resources::board::Board;
 use resources::tile::Tile;
 use resources::tile_map::TileMap;
+use resources::BoardAssets;
 use resources::BoardOptions;
 use resources::BoardPosition;
 use resources::TileSize;
 
-use bounds::Bounds2;
+use components::TileCover;
 use components::Bomb;
 use components::BombNeighbor;
 use components::Coordinates;
+use components::Covered;
+use components::Flag;
 
-use crate::components::Covered;
-use crate::events::TileTriggerEvent;
+use events::BombExplosionEvent;
+use events::TileDiscoverEvent;
+use events::TileMarkEvent;
+
+use bounds::Bounds2;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
@@ -44,11 +49,14 @@ impl<T: States> Plugin for BoardPlugin<T> {
                     systems::input::handle_input,
                     systems::uncover::handle_discover_event,
                     systems::uncover::discover_tiles,
+                    systems::mark::mark_tiles,
                 )
                     .in_set(OnUpdate(AppState::InGame)),
             )
             .add_system(Self::cleanup_board.in_schedule(OnExit(AppState::InGame)))
-            .add_event::<TileTriggerEvent>();
+            .add_event::<BombExplosionEvent>()
+            .add_event::<TileMarkEvent>()
+            .add_event::<TileDiscoverEvent>();
 
         log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
@@ -57,6 +65,7 @@ impl<T: States> Plugin for BoardPlugin<T> {
             app.register_type::<Bomb>();
             app.register_type::<BoardOptions>();
             app.register_type::<Covered>();
+            app.register_type::<Flag>();
         }
     }
 }
@@ -67,11 +76,12 @@ impl<T> BoardPlugin<T> {
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         window: Query<&Window>,
-        asset_server: Res<AssetServer>,
-        mut tile_trigger_ewr: EventWriter<TileTriggerEvent>,
+        mut tile_trigger_ewr: EventWriter<TileDiscoverEvent>,
+        board_assets: Res<BoardAssets>,
     ) {
-        let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
-        let bomb_sprite: Handle<Image> = asset_server.load("sprites/bomb.png");
+        // TODO: get from board_assets
+        // let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
+        // let bomb_sprite: Handle<Image> = asset_server.load("sprites/bomb.png");
 
         let options = match board_options {
             None => BoardOptions::default(),
@@ -105,7 +115,7 @@ impl<T> BoardPlugin<T> {
             BoardPosition::Custom(p) => p,
         };
 
-        let mut covered_tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
+        // let mut covered_tiles = HashSet::with_capacity((tile_map.width * tile_map.height).into());
         let mut tiles = HashMap::with_capacity((tile_map.width * tile_map.height).into());
         let mut safe_start = None;
 
@@ -120,10 +130,11 @@ impl<T> BoardPlugin<T> {
                 parent
                     .spawn(SpriteBundle {
                         sprite: Sprite {
-                            color: Color::WHITE,
+                            color: board_assets.board_material.color,
                             custom_size: Some(board_size),
                             ..Default::default()
                         },
+                        texture: board_assets.board_material.texture.clone(),
                         transform: Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
                         ..Default::default()
                     })
@@ -134,33 +145,29 @@ impl<T> BoardPlugin<T> {
                     &tile_map,
                     tile_size,
                     options.tile_padding,
-                    Color::GRAY,
-                    bomb_sprite,
-                    font,
-                    Color::DARK_GRAY,
-                    &mut covered_tiles,
+                    &board_assets,
                     &mut tiles,
                     &mut safe_start,
-                )
+                );
             })
             .id();
 
         if options.safe_start {
             if let Some(entity) = safe_start {
-                tile_trigger_ewr.send(TileTriggerEvent(entity));
+                tile_trigger_ewr.send(TileDiscoverEvent(entity));
             }
         }
 
-        commands.insert_resource(Board {
-            tile_map,
-            bounds: Bounds2 {
+        commands.insert_resource(Board::new(
+            board_entity,
+            Bounds2 {
                 position: Vec2::new(board_position.x, board_position.y),
                 size: board_size,
             },
             tile_size,
+            tile_map,
             tiles,
-            entity: board_entity,
-        });
+        ));
     }
 
     fn adaptive_tile_size(
@@ -169,7 +176,7 @@ impl<T> BoardPlugin<T> {
         (width, height): (u16, u16),
     ) -> f32 {
         for window in &windows {
-            // TODO: fix this
+            // TODO: fix this (get primary window instead)
             let max_width = window.resolution.width() / width as f32;
             let max_heigth = window.resolution.height() / height as f32;
             return max_width.min(max_heigth).clamp(min, max);
@@ -209,11 +216,7 @@ impl<T> BoardPlugin<T> {
         tile_map: &TileMap,
         size: f32,
         padding: f32,
-        color: Color,
-        bomb_image: Handle<Image>,
-        font: Handle<Font>,
-        covered_tile_color: Color,
-        covered_tiles: &mut HashMap<Coordinates, Entity>,
+        board_assets: &BoardAssets,
         tiles: &mut HashMap<Coordinates, Entity>,
         safe_start_entity: &mut Option<Entity>,
     ) {
@@ -232,7 +235,7 @@ impl<T> BoardPlugin<T> {
                 let base_command = cmd
                     .insert(SpriteBundle {
                         sprite: Sprite {
-                            color,
+                            color: board_assets.tile_material.color,
                             custom_size: Some(Vec2::splat(size - padding as f32)),
                             ..Default::default()
                         },
@@ -241,6 +244,7 @@ impl<T> BoardPlugin<T> {
                             (y as f32 * size) + (size / 2.),
                             1.,
                         ),
+                        texture: board_assets.tile_material.texture.clone(),
                         ..Default::default() // We add the `Coordinates` component to our tile entity
                     })
                     .insert(covered)
@@ -265,7 +269,8 @@ impl<T> BoardPlugin<T> {
                         .spawn(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::splat(size - padding)),
-                                color: covered_tile_color,
+                                color: board_assets.covered_tile_material.color,
+                                // color: covered_tile_color,
                                 ..Default::default()
                             },
                             transform: Transform::from_xyz(0., 0., 2.),
@@ -276,8 +281,6 @@ impl<T> BoardPlugin<T> {
                         .insert(Name::new("Tile: Cover"))
                         .insert(TileCover)
                         .id();
-
-                    covered_tiles.insert(coordinates, entity);
 
                     if safe_start_entity.is_none() && *tile == Tile::Empty {
                         *safe_start_entity = Some(entity);
@@ -296,7 +299,7 @@ impl<T> BoardPlugin<T> {
                                         ..default()
                                     },
                                     transform: Transform::from_xyz(0., 0., 1.),
-                                    texture: bomb_image.clone(),
+                                    texture: board_assets.bomb_material.texture.clone(),
                                     ..default()
                                 })
                                 .insert(Name::new("Tile: Bomb face"));
@@ -308,7 +311,7 @@ impl<T> BoardPlugin<T> {
                             parent
                                 .spawn(Self::bomb_count_text_bundle(
                                     *count,
-                                    font.clone(),
+                                    board_assets.bomb_counter_font.clone(),
                                     size - padding,
                                 ))
                                 .insert(Name::new("Tile: Neighbor face"));
