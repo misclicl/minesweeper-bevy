@@ -23,6 +23,7 @@ pub fn handle_discover_event(
             if board.is_flag_at(coordinates) {
                 continue;
             }
+            board.coordinates_discovered.insert(*coordinates);
             covered.is_covered = false;
 
             if board.tile_map.is_bomb_at(*coordinates) {

@@ -223,6 +223,9 @@ impl<T> BoardPlugin<T> {
 
                 let mut cmd = parent.spawn_empty();
 
+                // spawn border tiles
+                
+
                 // spawn tile base
                 let base_command = cmd
                     .insert(SpriteBundle {

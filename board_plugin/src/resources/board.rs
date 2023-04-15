@@ -108,7 +108,6 @@ impl Board {
             self.coordinates_discovered.insert(*v);
         }
 
-        self.coordinates_discovered.insert(*coordinates);
         discovered.keys().cloned().collect()
     }
 
@@ -127,7 +126,6 @@ impl Board {
             true
         };
 
-        info!("{}, {:?}", is_marked, self.coordinates_marked);
         is_marked
     }
 
