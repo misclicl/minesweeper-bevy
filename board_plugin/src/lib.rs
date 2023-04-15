@@ -17,12 +17,13 @@ use resources::BoardOptions;
 use resources::BoardPosition;
 use resources::TileSize;
 
-use components::TileCover;
 use components::Bomb;
 use components::BombNeighbor;
 use components::Coordinates;
 use components::Covered;
+#[cfg(feature = "debug")]
 use components::Flag;
+use components::TileCover;
 
 use events::BombExplosionEvent;
 use events::TileDiscoverEvent;
@@ -79,10 +80,6 @@ impl<T> BoardPlugin<T> {
         mut tile_trigger_ewr: EventWriter<TileDiscoverEvent>,
         board_assets: Res<BoardAssets>,
     ) {
-        // TODO: get from board_assets
-        // let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
-        // let bomb_sprite: Handle<Image> = asset_server.load("sprites/bomb.png");
-
         let options = match board_options {
             None => BoardOptions::default(),
             Some(opts) => opts.clone(),
@@ -185,28 +182,23 @@ impl<T> BoardPlugin<T> {
         return 0.;
     }
 
-    fn bomb_count_text_bundle(count: u8, font: Handle<Font>, font_size: f32) -> Text2dBundle {
-        let (text, color) = (
-            count.to_string(),
-            match count {
-                1 => Color::WHITE,
-                2 => Color::GREEN,
-                3 => Color::YELLOW,
-                4 => Color::ORANGE,
-                _ => Color::PURPLE,
-            },
-        );
-
-        let text_style = TextStyle {
-            color,
-            font,
-            font_size,
+    fn bomb_count_text_bundle(
+        count: u8,
+        board_assets: &BoardAssets, 
+    ) -> SpriteBundle {
+        let asset = match count {
+            1 => board_assets.material_1.texture.clone(),
+            2 => board_assets.material_2.texture.clone(),
+            3 => board_assets.material_3.texture.clone(),
+            _ => panic!()
         };
 
-        Text2dBundle {
-            text: Text::from_section(text, text_style.clone())
-                .with_alignment(TextAlignment::Center),
-            transform: Transform::from_xyz(0., 2.5, 1.),
+        SpriteBundle {
+            sprite: Sprite {
+                ..default()
+            },
+            transform: Transform::from_xyz(0., 0., 2.),
+            texture: asset,
             ..default()
         }
     }
@@ -268,13 +260,10 @@ impl<T> BoardPlugin<T> {
                     let entity = parent
                         .spawn(SpriteBundle {
                             sprite: Sprite {
-                                custom_size: Some(Vec2::splat(size - padding)),
-                                color: board_assets.covered_tile_material.color,
-                                // color: covered_tile_color,
                                 ..Default::default()
                             },
-                            transform: Transform::from_xyz(0., 0., 2.),
-                            // questinable??
+                            transform: Transform::from_xyz(-1., 1., 3.),
+                            texture: board_assets.covered_tile_material.texture.clone(),
                             visibility: Visibility::Visible,
                             ..Default::default()
                         })
@@ -295,7 +284,7 @@ impl<T> BoardPlugin<T> {
                             parent
                                 .spawn(SpriteBundle {
                                     sprite: Sprite {
-                                        custom_size: Some(Vec2::splat(size - padding as f32)),
+                                        custom_size: Some(Vec2::splat(size - padding)),
                                         ..default()
                                     },
                                     transform: Transform::from_xyz(0., 0., 1.),
@@ -311,8 +300,7 @@ impl<T> BoardPlugin<T> {
                             parent
                                 .spawn(Self::bomb_count_text_bundle(
                                     *count,
-                                    board_assets.bomb_counter_font.clone(),
-                                    size - padding,
+                                    board_assets,
                                 ))
                                 .insert(Name::new("Tile: Neighbor face"));
                         });

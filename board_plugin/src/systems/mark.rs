@@ -1,4 +1,3 @@
-use bevy::log;
 use bevy::prelude::*;
 
 use crate::components::Flag;
@@ -21,9 +20,6 @@ pub fn mark_tiles(
 
         if let Ok((coordinates, children)) = q_tiles.get_mut(entity) {
             if board.try_toggle_mark(*coordinates) {
-                let mut transform = Transform::from_xyz(0., 0., 2.);
-                transform.scale = Vec3::from_array([0.8;3]);
-                
                 commands.entity(entity).with_children(|parent| {
                     parent
                         .spawn(SpriteBundle {
@@ -33,7 +29,7 @@ pub fn mark_tiles(
                                 color: board_assets.flag_material.color,
                                 ..Default::default()
                             },
-                            transform,
+                            transform: Transform::from_xyz(0., 0., 4.),
                             ..default()
                         })
                         .insert(Flag {})

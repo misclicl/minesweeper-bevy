@@ -108,6 +108,7 @@ impl Board {
             self.coordinates_discovered.insert(*v);
         }
 
+        self.coordinates_discovered.insert(*coordinates);
         discovered.keys().cloned().collect()
     }
 

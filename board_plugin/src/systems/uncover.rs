@@ -21,7 +21,7 @@ pub fn handle_discover_event(
 
         if let Ok((mut covered, coordinates, _)) = tiles.get_mut(entity) {
             if board.is_flag_at(coordinates) {
-                return;
+                continue;
             }
             covered.is_covered = false;
 
@@ -31,7 +31,7 @@ pub fn handle_discover_event(
             }
 
             if !board.tile_map.is_empty_at(*coordinates) {
-                return;
+                continue;
             }
 
             let discovered_entities = board.flood_discovery(&coordinates).clone();
@@ -45,18 +45,17 @@ pub fn handle_discover_event(
 }
 
 pub fn discover_tiles(
-    query: Query<(Entity, &Covered, &Children), Changed<Covered>>,
+    query: Query<(&Covered, &Children), Changed<Covered>>,
     mut q_children: Query<(&mut Visibility, With<TileCover>)>,
 ) {
-    for (entity, covered, children) in &query {
-        if !covered.is_covered {
-            log::debug!("{:?} changed: {:?}", entity, covered,);
-
-            for &child in children.iter() {
+    query
+        .iter()
+        .filter(|(covered, _)| !covered.is_covered)
+        .for_each(|(_, children)| {
+            children.iter().for_each(|&child| {
                 if let Ok((mut visibility, _)) = q_children.get_mut(child) {
                     *visibility = Visibility::Hidden;
                 }
-            }
-        }
-    }
+            });
+        });
 }

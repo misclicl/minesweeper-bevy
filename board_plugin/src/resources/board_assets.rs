@@ -22,10 +22,12 @@ pub struct BoardAssets {
     pub board_material: SpriteMaterial,
     pub tile_material: SpriteMaterial,
     pub covered_tile_material: SpriteMaterial,
-    pub bomb_counter_font: Handle<Font>,
     pub bomb_counter_colors: Vec<Color>,
     pub flag_material: SpriteMaterial,
     pub bomb_material: SpriteMaterial,
+    pub material_1: SpriteMaterial,
+    pub material_2: SpriteMaterial,
+    pub material_3: SpriteMaterial,
 }
 
 impl BoardAssets {
