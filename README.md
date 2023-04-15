@@ -1,7 +1,3 @@
-<img src="docs/screenshot.png" height="384px">
-
-## Running the app
-
 Development:
 
 ```bash
