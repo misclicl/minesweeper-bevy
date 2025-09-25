@@ -1,6 +1,6 @@
 # RustySweeper
 
-This is an implementation of the classic Minesweeper game, built using the Rust programming language and Bevy Framework.
+A clone of a classic Minesweeper game, built using the Rust and Bevy.
 
 <img src="docs/screenshot.png" height="384px">
 
